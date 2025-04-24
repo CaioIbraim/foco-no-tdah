@@ -1,168 +1,113 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server";
+import { Resend } from "resend";
+import { readFileSync } from "fs";
+import { join } from "path";
 
-// Tipos para os dados do webhook do Kiwify
-type KiwifyCustomer = {
-  id: string
-  name: string
-  email: string
-  phone?: string
-  document?: string
-}
+// Tipos mínimos para o webhook do Kiwify
+type ClienteKiwify = {
+  id: string;
+  nome: string;
+  email: string;
+};
 
-type KiwifyProduct = {
-  id: string
-  name: string
-  price: number
-}
+type ProdutoKiwify = {
+  id: string;
+  nome: string;
+  preco: number;
+};
 
-type KiwifyOrder = {
-  id: string
-  status: "approved" | "refunded" | "chargeback" | "dispute" | "canceled"
-  payment_method: "credit_card" | "boleto" | "pix"
-  installments?: number
-  total_amount: number
-  created_at: string
-  paid_at?: string
-}
+type PedidoKiwify = {
+  id: string;
+  status: string;
+};
 
-type KiwifyWebhookPayload = {
-  event: "order.created" | "order.paid" | "order.completed" | "order.canceled" | "order.refunded"
-  data: {
-    customer: KiwifyCustomer
-    product: KiwifyProduct
-    order: KiwifyOrder
-  }
-}
+type PayloadWebhookKiwify = {
+  evento: string;
+  dados: {
+    cliente: ClienteKiwify;
+    produto: ProdutoKiwify;
+    pedido: PedidoKiwify;
+  };
+};
 
-// Chave secreta para validar o webhook (deve ser configurada no painel do Kiwify)
-// Em produção, isso deve vir de uma variável de ambiente
-const WEBHOOK_SECRET = "7q19rjfd7bf"
+// Inicializar Resend com a chave da API
+const resend = new Resend(process.env.RESEND_API_KEY);
 
-export async function POST(request: NextRequest) {
+// Caminho para o PDF do curso
+const CAMINHO_PDF = join(process.cwd(), "public", "Foco_no_TDAH.pdf");
+
+export async function POST(requisicao: NextRequest) {
   try {
     // Verificar se o corpo da requisição existe
-    if (!request.body) {
-      return NextResponse.json({ error: "Corpo da requisição vazio" }, { status: 400 })
+    if (!requisicao.body) {
+      return NextResponse.json({ erro: "Corpo da requisição vazio" }, { status: 400 });
     }
 
     // Obter o corpo da requisição como JSON
-    const payload: KiwifyWebhookPayload = await request.json()
-
-    // Validar a assinatura do webhook (em um ambiente de produção)
-    // Isso é um exemplo simplificado - o Kiwify deve fornecer documentação sobre como validar webhooks
-    const signature = request.headers.get("x-kiwify-signature")
-    if (!signature) {
-      console.error("Assinatura do webhook ausente")
-      return NextResponse.json({ error: "Assinatura do webhook ausente" }, { status: 401 })
+    let payload: PayloadWebhookKiwify;
+    try {
+      payload = await requisicao.json();
+    } catch {
+      return NextResponse.json({ erro: "JSON inválido" }, { status: 400 });
     }
 
-    // Verificar o tipo de evento
-    console.log(`Webhook recebido: ${payload.event}`)
+    // Registrar o evento
+    console.log(`Evento do webhook: ${payload.evento}`);
 
-    // Processar o evento com base no tipo
-    switch (payload.event) {
-      case "order.paid":
-        await handleOrderPaid(payload)
-        break
-      case "order.refunded":
-        await handleOrderRefunded(payload)
-        break
-      case "order.canceled":
-        await handleOrderCanceled(payload)
-        break
-      case "order.created":
-        await handleOrderCreated(payload)
-        break
-      case "order.completed":
-        await handleOrderCompleted(payload)
-        break
-      default:
-        console.warn(`Evento desconhecido: ${payload.event}`)
+    // Processar apenas o evento order.paid
+    if (payload.evento === "order.paid") {
+      await lidarComPagamentoAprovado(payload);
+    } else {
+      console.log(`Evento ignorado: ${payload.evento}`);
     }
 
     // Responder com sucesso
-    return NextResponse.json({ success: true })
-  } catch (error) {
-    console.error("Erro ao processar webhook do Kiwify:", error)
-    return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
+    return NextResponse.json({ sucesso: true });
+  } catch (erro) {
+    console.error("Erro no webhook:", erro);
+    return NextResponse.json({ erro: "Erro no servidor" }, { status: 500 });
   }
 }
 
-// Funções para lidar com diferentes tipos de eventos
+// Função para lidar com pagamento aprovado
+async function lidarComPagamentoAprovado(payload: PayloadWebhookKiwify) {
+  const { cliente, produto, pedido } = payload.dados;
 
-async function handleOrderPaid(payload: KiwifyWebhookPayload) {
-  const { customer, product, order } = payload.data
+  console.log(`Pedido aprovado: ${pedido.id}, Cliente: ${cliente.email}`);
 
-  console.log(`Venda aprovada: ${order.id}`)
-  console.log(`Cliente: ${customer.name} (${customer.email})`)
-  console.log(`Produto: ${product.name} - R$ ${product.price}`)
+  // Enviar e-mail com o PDF
+  try {
+    const pdfBuffer = readFileSync(CAMINHO_PDF);
+    const pdfBase64 = pdfBuffer.toString("base64");
 
-  // Aqui você pode:
-  // 1. Salvar a venda em seu banco de dados
-  // 2. Enviar email de boas-vindas para o cliente
-  // 3. Conceder acesso ao produto
-  // 4. Registrar a conversão em ferramentas de analytics
-  // 5. Etc.
+    await resend.emails.send({
+      from: "Foco no TDAH <devcaioibraim@gmail.com>", // Substitua pelo seu domínio
+      to: cliente.email,
+      subject: `Bem-vindo(a) ao Foco no TDAH, ${cliente.nome}!`,
+      text: `
+Olá, ${cliente.nome},
 
-  // Exemplo: Salvar em um banco de dados (pseudocódigo)
-  // await db.sales.create({
-  //   orderId: order.id,
-  //   customerId: customer.id,
-  //   customerName: customer.name,
-  //   customerEmail: customer.email,
-  //   productId: product.id,
-  //   productName: product.name,
-  //   amount: order.total_amount,
-  //   paymentMethod: order.payment_method,
-  //   paidAt: order.paid_at,
-  //   status: order.status
-  // });
+Obrigado por adquirir o curso "Foco no TDAH: Como Aumentar a Concentração e Vencer a Procrastinação"!
 
-  // Exemplo: Enviar email de boas-vindas (pseudocódigo)
-  // await sendEmail({
-  //   to: customer.email,
-  //   subject: `Bem-vindo ao ${product.name}!`,
-  //   template: 'welcome',
-  //   variables: {
-  //     name: customer.name,
-  //     productName: product.name,
-  //     accessLink: `https://seusite.com/acesso?token=${generateAccessToken(customer.id, product.id)}`
-  //   }
-  // });
-}
+O e-book inicial do curso está anexado neste e-mail em formato PDF. Baixe-o e comece a aplicar as técnicas práticas hoje mesmo!
 
-async function handleOrderRefunded(payload: KiwifyWebhookPayload) {
-  const { customer, product, order } = payload.data
+Se precisar de suporte, entre em contato pelo e-mail devcaioibraim@gmail.com ou junte-se à nossa comunidade no Telegram (o link está no PDF).
 
-  console.log(`Venda reembolsada: ${order.id}`)
+Vamos juntos transformar o TDAH em seu superpoder!
 
-  // Aqui você pode:
-  // 1. Atualizar o status da venda no banco de dados
-  // 2. Revogar acesso ao produto
-  // 3. Enviar email informando sobre o reembolso
-  // 4. Etc.
-}
+Equipe Foco no TDAH
+      `,
+      attachments: [
+        {
+          filename: "Foco_no_TDAH.pdf",
+          content: pdfBase64,
+          contentType: "application/pdf",
+        },
+      ],
+    });
 
-async function handleOrderCanceled(payload: KiwifyWebhookPayload) {
-  const { customer, product, order } = payload.data
-
-  console.log(`Venda cancelada: ${order.id}`)
-
-  // Lógica para lidar com cancelamentos
-}
-
-async function handleOrderCreated(payload: KiwifyWebhookPayload) {
-  const { customer, product, order } = payload.data
-
-  console.log(`Venda criada: ${order.id}`)
-
-  // Lógica para lidar com pedidos recém-criados
-}
-
-async function handleOrderCompleted(payload: KiwifyWebhookPayload) {
-  const { customer, product, order } = payload.data
-
-  console.log(`Venda concluída: ${order.id}`)
-
-  // Lógica para lidar com pedidos concluídos
+    console.log(`E-mail enviado para ${cliente.email}`);
+  } catch (erro) {
+    console.error(`Falha ao enviar e-mail para ${cliente.email}:`, erro);
+  }
 }
