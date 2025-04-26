@@ -13,7 +13,7 @@ export default function Home() {
       <header className="container mx-auto py-6 flex justify-between items-center">
         <div className="flex items-center gap-2">
           <Brain className="h-8 w-8 text-purple-300" />
-          <span className="font-bold text-xl">FocoTDAH</span>
+          <span className="font-bold text-xl">FocoTDAH - Testes com Mathes</span>
         </div>
         <nav className="hidden md:flex gap-8">
           <Link href="#beneficios" className="hover:text-purple-300 transition-colors">
@@ -75,6 +75,52 @@ export default function Home() {
             />
           </div>
         </div>
+      </section>
+
+
+
+
+      {/* Hero Section */}
+      <section className="container mx-auto py-16 md:py-24 px-4 grid md:grid-cols-2 gap-12 items-center">
+        <div className="space-y-6">
+          <div className="inline-block bg-purple-500/20 px-4 py-2 rounded-full text-purple-300 font-medium">
+            Entre em contato
+          </div>
+          <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold leading-tight">
+            Digite seus Dados
+          </h1>
+         <form action="/listar" method="get">
+            <div className="mb-4">
+              <label htmlFor="name" className="block text-sm font-medium text-purple-200">
+                Nome
+              </label>
+              <input
+                type="text"
+                id="name"
+                name="name"
+                placeholder="Seu Nome"
+                className="w-full p-2 border border-purple-500 rounded-md bg-purple-900/40 text-purple-200"
+              />
+            </div>
+            <div className="mb-4">
+              <label htmlFor="email" className="block text-sm font-medium text-purple-200">
+                Email
+              </label>
+              <input
+                type="email"
+                id="email"
+                name="email"
+                placeholder="Seu Email"
+                className="w-full p-2 border border-purple-500 rounded-md bg-purple-900/40 text-purple-200"
+              />
+            </div>  
+            <Button type="submit" className="bg-purple-500 hover:bg-purple-600 text-white">
+              Enviar
+            </Button>
+         </form>
+        
+        </div>
+        
       </section>
 
       {/* Features Section */}
